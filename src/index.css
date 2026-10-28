@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "pdfjs-dist/web/pdf_viewer.css";
+
+.font-exam {
+  font-family: "Times New Roman", Times, "Liberation Serif", serif;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 15mm 15mm 15mm 15mm;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: "Times New Roman", Times, "Liberation Serif", serif !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .page-break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

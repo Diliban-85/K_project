@@ -1,0 +1,7 @@
+{
+  "name": "Teacher Exam & Class Management Portal",
+  "description": "School staff portal for teachers to manage classes, subjects, exam patterns, and question papers with secure teacher-scoped ownership.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

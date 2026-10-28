@@ -1,0 +1,306 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         String    @default("TEACHER")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  classes        Class[]
+  subjects       Subject[]
+  resources      Resource[]
+  papers         Paper[]
+  settings       SystemSettings?
+  bankQuestions  BankQuestion[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Class {
+  id          String    @id @default(uuid())
+  name        String
+  grade       String?
+  section     String?
+  description String?
+  teacherId   String
+  teacher     User      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  subjects    Subject[]
+  resources   Resource[]
+  papers      Paper[]
+
+  @@unique([teacherId, name])
+  @@map("classes")
+}
+
+model Subject {
+  id          String    @id @default(uuid())
+  name        String
+  code        String?
+  description String?
+  teacherId   String
+  teacher     User      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId     String
+  class       Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  resources   Resource[]
+  papers      Paper[]
+
+  @@unique([classId, name])
+  @@map("subjects")
+}
+
+model Resource {
+  id               String         @id @default(uuid())
+  name             String
+  fileType         String
+  fileSize         Int
+  storagePath      String
+  processingStatus String         @default("UPLOADING") // UPLOADING | PROCESSING | READY | FAILED
+  processingError  String?
+  teacherId        String
+  teacher          User           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId          String
+  class            Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId        String
+  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  file             ResourceFile?
+  pages            ResourcePage[]
+  paperQuestions   PaperQuestion[]
+
+  @@index([teacherId, classId, subjectId])
+  @@map("resources")
+}
+
+model ResourceFile {
+  id              String   @id @default(uuid())
+  resourceId      String   @unique
+  resource        Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  storageProvider String   @default("local-s3-compatible")
+  storageKey      String
+  createdAt       DateTime @default(now())
+
+  @@map("resource_files")
+}
+
+model ResourcePage {
+  id         String   @id @default(uuid())
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  text       String?
+  wordCount  Int?     @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([resourceId, pageNumber])
+  @@map("resource_pages")
+}
+
+model Paper {
+  id                  String         @id @default(uuid())
+  teacherId           String
+  teacher             User           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId             String
+  class               Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId           String
+  subject             Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  schoolName          String?
+  examinationName     String
+  academicYear        String?        @default("2025-2026")
+  date                String?
+  duration            String?
+  totalMarks          Int            @default(100)
+  generalInstructions String?
+  creationMode        String         @default("MANUAL") // MANUAL | AI
+  status              String         @default("DRAFT")  // DRAFT | READY | PUBLISHED
+  isArchived          Boolean        @default(false)
+  pdfGeneratedAt      DateTime?
+  pdfVersion          Int            @default(0)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  sections        PaperSection[]
+  choiceGroups    ChoiceGroup[]
+  questions       PaperQuestion[]
+  pdfHistories    PdfHistory[]
+
+  @@index([teacherId, classId, subjectId])
+  @@map("papers")
+}
+
+model PaperSection {
+  id                  String          @id @default(uuid())
+  paperId             String
+  paper               Paper           @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  name                String          // e.g. "Part A", "Part B"
+  instructions        String?
+  position            Int             @default(0)
+  targetQuestions     Int             @default(0)
+  questionsProvided   Int             @default(0)
+  questionsToAnswer   Int             @default(0)
+  compulsoryQuestions String?         // e.g. JSON array or comma-separated list of question numbers/indices
+  marksPerQuestion    Int             @default(1)
+  hasInternalChoice   Boolean         @default(false)
+  choiceCount         Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  choiceGroups ChoiceGroup[]
+  questions    PaperQuestion[]
+
+  @@index([paperId, position])
+  @@map("paper_sections")
+}
+
+model ChoiceGroup {
+  id           String          @id @default(uuid())
+  paperId      String
+  paper        Paper           @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  sectionId    String
+  section      PaperSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  position     Int             @default(0)
+  label        String?         // e.g. "Answer either A or B"
+  marks        Int?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  questions    PaperQuestion[]
+
+  @@index([sectionId, position])
+  @@map("choice_groups")
+}
+
+model PaperQuestion {
+  id                   String        @id @default(uuid())
+  paperId              String
+  paper                Paper         @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  sectionId            String
+  section              PaperSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  choiceGroupId        String?
+  choiceGroup          ChoiceGroup?  @relation(fields: [choiceGroupId], references: [id], onDelete: SetNull)
+  choiceOption         String?       // "A", "B", etc.
+  position             Int           @default(0)
+  questionText         String
+  originalSourceText   String?
+  marks                Int           @default(1)
+  isCompulsory         Boolean       @default(false)
+  
+  sourceResourceId     String?
+  sourceResource       Resource?     @relation(fields: [sourceResourceId], references: [id], onDelete: SetNull)
+  sourcePageNumber     Int?
+  sourceQuestionNumber String?
+  sourceChapter        String?
+
+  visualAssetUrl       String?
+  cropCoordinates      String?
+
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([paperId, sectionId, position])
+  @@map("paper_questions")
+}
+
+model SystemSettings {
+  id                  String   @id @default(uuid())
+  teacherId           String   @unique
+  teacher             User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  schoolName          String?  @default("Springfield High School")
+  schoolAddress       String?  @default("123 Education Lane, Academic City")
+  contactPhone        String?
+  contactEmail        String?
+  website             String?
+  logoUrl             String?
+  academicYear        String?  @default("2025-2026")
+  defaultExamName     String?  @default("Mid-Term Examination")
+  defaultClassId      String?
+  defaultSubjectId    String?
+  defaultTotalMarks   Int      @default(100)
+  defaultDuration     String   @default("3 Hours")
+  defaultInstructions String?  @default("1. All questions are compulsory unless specified.\n2. Read all questions carefully before answering.\n3. Write your Roll Number clearly on the answer sheet.")
+  fontSizePreference  String   @default("NORMAL") // COMPACT | NORMAL | LARGE
+  showWatermark       Boolean  @default(false)
+  watermarkText       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model BankQuestion {
+  id                   String        @id @default(uuid())
+  teacherId            String
+  teacher              User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId              String?
+  subjectId            String?
+  chapter              String?
+  topic                String?
+  questionText         String
+  marks                Int           @default(1)
+  questionType         String        @default("SUBJECTIVE") // MCQ | SHORT | LONG | NUMERICAL | CASE_STUDY
+  difficulty           String        @default("MEDIUM") // EASY | MEDIUM | HARD
+  visualAssetUrl       String?
+  cropCoordinates      String?
+  sourceResourceId     String?
+  sourcePageNumber     Int?
+  sourceQuestionNumber String?
+  isArchived           Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([teacherId, subjectId, classId])
+  @@map("bank_questions")
+}
+
+model PdfHistory {
+  id            String    @id @default(uuid())
+  paperId       String
+  paper         Paper     @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  version       Int
+  status        String    @default("READY")
+  totalMarks    Int       @default(100)
+  questionCount Int       @default(0)
+  pageCount     Int       @default(1)
+  notes         String?
+  generatedAt   DateTime  @default(now())
+
+  @@index([paperId, version])
+  @@map("pdf_histories")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  teacherId  String
+  teacher    User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  action     String   // PAPER_CREATED, PAPER_DUPLICATED, PAPER_UPDATED, PAPER_ARCHIVED, PAPER_RESTORED, PAPER_DELETED, PDF_GENERATED, QUESTION_CREATED, QUESTION_UPDATED, QUESTION_ARCHIVED, QUESTION_DELETED, SETTINGS_UPDATED, BACKUP_EXPORTED, BACKUP_RESTORED
+  entityType String   // PAPER, QUESTION, SETTINGS, BACKUP
+  entityId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([teacherId, action])
+  @@map("audit_logs")
+}
+
+
